@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { Delete, Moon, Sun, X } from 'lucide-react'
 import { catIcon } from './config.ts'
 import { can, clearPrint, findByPin, getState, useUi, type Ticket } from './store.ts'
 import type { User } from './types.ts'
@@ -34,6 +34,8 @@ export function Keypad({ value, onChange, max = 4, onDone }: { value: string; on
   }
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
+      // lo que se escribe en un campo (ej. el motivo de una anulación) no es parte del PIN
+      if (e.target instanceof HTMLElement && e.target.matches('input, textarea, select')) return
       if (/^\d$/.test(e.key)) press(e.key)
       else if (e.key === 'Backspace') press('⌫')
       else if (e.key === 'Enter') press('OK')
@@ -45,7 +47,11 @@ export function Keypad({ value, onChange, max = 4, onDone }: { value: string; on
     <div className="stack">
       <div className="dots" aria-label={`${value.length} dígitos`}>{Array.from({ length: max }, (_, i) => <span key={i} className={i < value.length ? 'on' : ''} />)}</div>
       <div className="keypad">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'].map((k) => <button key={k} onClick={() => press(k)} aria-label={k === '⌫' ? 'Borrar' : k}>{k}</button>)}
+        {/* sin botón OK: el PIN entra solo al marcar el último dígito (Enter sigue funcionando con teclado) */}
+        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((k) => <button key={k} onClick={() => press(k)}>{k}</button>)}
+        <span />
+        <button onClick={() => press('0')}>0</button>
+        <button className="erase" onClick={() => press('⌫')} aria-label="Borrar" disabled={!value}><Delete size={28} strokeWidth={1.75} aria-hidden /></button>
       </div>
     </div>
   )
@@ -99,7 +105,8 @@ export function TicketView({ t }: { t: Ticket }) {
 export function PrintHost() {
   const { print } = useUi()
   useEffect(() => {
-    if (print.length && getState().settings.autoPrint) setTimeout(() => window.print(), 50)
+    // window.print() bloquea hasta cerrar el diálogo; después no hace falta dejar la vista previa abierta
+    if (print.length && getState().settings.autoPrint) setTimeout(() => { window.print(); clearPrint() }, 50)
   }, [print])
   if (!print.length) return null
   return <>
@@ -140,4 +147,23 @@ export function CatIcon({ c, size = 18 }: { c: string; size?: number }) {
   return <I size={size} aria-hidden />
 }
 
-export const Money = ({ v }: { v: number }) => <>{money(v)}</>
+const THEME_KEY = 'mc-theme'
+const isDark = () => {
+  const t = document.documentElement.dataset.theme
+  return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+/** Día / noche. La elección queda en este navegador; sin elección se sigue el tema del sistema (ver index.html). */
+export function ThemeToggle({ className = 'ghost' }: { className?: string }) {
+  const [dark, setDark] = useState(isDark)
+  const toggle = () => {
+    const next = dark ? 'light' : 'dark'
+    document.documentElement.dataset.theme = next
+    try { localStorage.setItem(THEME_KEY, next) } catch { /* sin almacenamiento: dura hasta recargar */ }
+    setDark(!dark)
+  }
+  const label = dark ? 'Cambiar a modo día' : 'Cambiar a modo noche'
+  return <button className={`theme ${className}`} onClick={toggle} aria-label={label} title={label}>{dark ? <Sun size={20} aria-hidden /> : <Moon size={20} aria-hidden />}</button>
+}
+
+export const Money =({ v }: { v: number }) => <>{money(v)}</>

@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import type { Account, CashSession, Customer, Invoice, OrderLine, Payment, Product, Role, State, StockItem, User } from './types.ts'
 import { accountTotals, explode, fakeCufe, paid, uid } from './logic.ts'
-import { makeSeed } from './seed.ts'
+import { defaultRoom, makeSeed } from './seed.ts'
 import { ADMIN_ONLY, DEFAULT_PERMS, type Perm } from './config.ts'
 
 const KEY = 'mc-pos-v1'
@@ -15,6 +15,7 @@ function load(): State {
       const s: State = JSON.parse(raw)
       // cuentas abiertas sin productos (se abrieron y se abandonaron) no deben ocupar la mesa
       s.accounts = s.accounts.filter((a) => a.status !== 'open' || a.lines.length > 0)
+      s.room ??= defaultRoom() // datos guardados antes de que existiera la planta del local
       return s
     }
   } catch { /* almacenamiento bloqueado: se usa la semilla */ }
@@ -108,7 +109,8 @@ export function upsert<K extends Coll>(key: K, item: State[K][number]) {
 export function remove(key: Coll, id: string) {
   set((d) => { (d[key] as { id: string }[]) = (d[key] as { id: string }[]).filter((x) => x.id !== id) })
 }
-export const updateSettings = (patch: Partial<State['settings']>) => set((d) => { Object.assign(d.settings, patch) })
+export const setRoom = (room: State['room']) => set((d) => { d.room = room })
+export const updateSettings =(patch: Partial<State['settings']>) => set((d) => { Object.assign(d.settings, patch) })
 export const toggleAvailable = (p: Product) => upsert('products', { ...p, available: !p.available })
 
 // ---------- cuentas y pedidos ----------
@@ -343,4 +345,4 @@ export function registerPurchase(supplier: string, number: string, lines: Purcha
 
 // ---------- datos ----------
 export function resetDemo() { state = makeSeed(); set(() => {}); logout() }
-export function importData(json: string) { const s = JSON.parse(json) as State; if (!s.settings || !s.products) throw new Error('Archivo inválido'); set((d) => Object.assign(d, s)) }
+export function importData(json: string) { const s = JSON.parse(json) as State; if (!s.settings || !s.products) throw new Error('Archivo inválido'); s.room ??= defaultRoom(); set((d) => Object.assign(d, s)) }

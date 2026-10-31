@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { APP_NAME, ROLE_LABEL, type Perm } from './config.ts'
 import { can, logout, openCash, useStore, useUi } from './store.ts'
 import { Armchair, ChartLine, ChefHat, FileDown, FileText, Handshake, KeyRound, LogOut, Package, ReceiptText, Settings, Users, Wallet, type LucideIcon } from 'lucide-react'
-import { PrintHost, Toast } from './ui.tsx'
+import { PrintHost, ThemeToggle, Toast } from './ui.tsx'
 import type { User } from './types.ts'
 import Login from './screens/Login.tsx'
 import Mesas from './screens/Mesas.tsx'
@@ -54,7 +54,7 @@ function Shell({ user }: { user: User }) {
   return (
     <div className="app">
       <nav className="side" aria-label="Secciones">
-        <div className="brand neon">{APP_NAME}</div>
+        <div className="brand">{APP_NAME}</div>
         {allowed.map((n) => (
           <button key={n.id} className={view === n.id || (n.id === 'mesas' && view === 'cuenta') ? 'active' : ''} onClick={() => go(n.id)}>
             <n.icon className="nav-ico" size={20} aria-hidden /><span className="nav-label">{n.label}</span>
@@ -65,7 +65,10 @@ function Shell({ user }: { user: User }) {
           <span className="avatar" aria-hidden>{user.name[0]}</span>
           <span className="who-text"><b>{user.name}</b><small>{ROLE_LABEL[role]}</small></span>
           <span className={`dot ${cash ? 'ok' : ''}`} title={cash ? 'Caja abierta' : 'Caja cerrada'} />
-          <button className="sm ghost" onClick={logout} aria-label="Salir" title="Salir"><LogOut size={18} /></button>
+          <div className="who-actions">
+            <ThemeToggle />
+            <button className="ghost" onClick={logout} aria-label="Salir" title="Salir"><LogOut size={20} aria-hidden /></button>
+          </div>
         </div>
       </nav>
       <main key={view + (nav.accountId ?? '')} className="page">

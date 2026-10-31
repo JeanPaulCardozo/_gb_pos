@@ -12,7 +12,7 @@ export default function Caja() {
   const [counted, setCounted] = useState('')
   const [note, setNote] = useState('')
   const [confirming, setConfirming] = useState(false)
-  const name = (id?: string) => s.users.find((u) => u.id === id)?.name ?? '—'
+  const name = (id?: string) => s.users.find((u) => u.id === id)?.name ?? '–'
 
   const history = [...s.cashSessions].filter((c) => c.closedAt).reverse().slice(0, 15)
 

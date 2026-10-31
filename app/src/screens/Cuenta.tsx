@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { CreditCard, Printer, X } from 'lucide-react'
 import { accountTotals, money, paid, splitEven } from '../logic.ts'
-import { can, addLine, closeEmpty, moveLines, openCash, pay, preBill, remaining, renameAccount, sendOrder, setConvenio, toast, updatePending, useStore, useUi, voidAccount, voidLine } from '../store.ts'
+import { can, addLine, closeEmpty, moveLines, openAccount, openCash, openCashSession, pay, preBill, remaining, renameAccount, sendOrder, setConvenio, toast, updatePending, useStore, useUi, voidAccount, voidLine } from '../store.ts'
 import type { Customer, Payment, Product } from '../types.ts'
 import { AuthPrompt, CatIcon, Modal } from '../ui.tsx'
 import type { Go } from '../App.tsx'
 
-export const hhmm = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '—')
-export const minutes = (from: string, to?: string) => Math.round(((to ? +new Date(to) : Date.now()) - +new Date(from)) / 60000)
+export const hhmm = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '–')
+// "cafe" encuentra "Café": en servicio nadie escribe tildes
+const fold = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+export const minutes =(from: string, to?: string) => Math.round(((to ? +new Date(to) : Date.now()) - +new Date(from)) / 60000)
 
 export default function Cuenta({ accountId, go }: { accountId: string; go: Go }) {
   const s = useStore()
@@ -15,7 +17,6 @@ export default function Cuenta({ accountId, go }: { accountId: string; go: Go })
   const a = s.accounts.find((x) => x.id === accountId)
   const [cat, setCat] = useState(s.settings.categories[0])
   const [q, setQ] = useState('')
-  const [adding, setAdding] = useState<Product>()
   const [voiding, setVoiding] = useState<string | 'all'>()
   const [splitting, setSplitting] = useState(false)
   const [paying, setPaying] = useState(false)
@@ -25,11 +26,20 @@ export default function Cuenta({ accountId, go }: { accountId: string; go: Go })
   if (!a) return <div className="stack"><p>La cuenta ya no existe.</p><button onClick={() => go('mesas')}>← Salón</button></div>
   const table = s.tables.find((t) => t.id === a.tableId)
   const t = accountTotals(a, s.convenios, s.settings.taxRate)
-  const products = s.products.filter((p) => (q ? p.name.toLowerCase().includes(q.toLowerCase()) : p.category === cat))
+  const products = s.products.filter((p) => (q ? fold(p.name).includes(fold(q)) : p.category === cat))
   const isOpen = a.status === 'open'
   const active = a.lines.filter((l) => l.status !== 'void')
+  const inAccount = (id: string) => active.filter((l) => l.productId === id).reduce((x, l) => x + l.qty, 0)
+  const canSell = (p: Product) => p.available && remaining(p) > 0
+  // Un toque = una unidad. Cantidad y comentario se ajustan en la línea pendiente.
+  const add = (p: Product) => addLine(a.id, p, 1, '')
+  const onSearchKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') setQ('')
+    const first = products.find(canSell)
+    if (e.key === 'Enter' && first && isOpen) { add(first); setQ('') }
+  }
   const lastSent = a.lines.map((l) => l.sentAt).filter(Boolean).sort().at(-1)
-  const userName = (id?: string) => s.users.find((u) => u.id === id)?.name ?? '—'
+  const userName = (id?: string) => s.users.find((u) => u.id === id)?.name ?? '–'
 
   return (
     <div className="stack">
@@ -40,34 +50,39 @@ export default function Cuenta({ accountId, go }: { accountId: string; go: Go })
           <input aria-label="Nombre de la cuenta" value={a.label} onChange={(e) => renameAccount(a.id, e.target.value)} disabled={!isOpen} style={{ width: 160 }} />
           <span className={`pill ${isOpen ? 'gold' : a.status === 'paid' ? 'ok' : 'bad'}`}>{isOpen ? 'Abierta' : a.status === 'paid' ? 'Pagada' : 'Anulada'}</span>
         </div>
+        {isOpen && active.length > 0 && <button className="sm" onClick={() => go('cuenta', openAccount(a.tableId))}>+ Otra cuenta en esta mesa</button>}
       </div>
 
       <div className="timeline" aria-label="Seguimiento de la cuenta">
         <span><small>Abierta</small>{hhmm(a.openedAt)} · {userName(a.openedBy)}</span>
         <span><small>Último envío</small>{hhmm(lastSent)}</span>
-        <span><small>{a.status === 'void' ? 'Anulada' : 'Cerrada'}</small>{a.closedAt ? `${hhmm(a.closedAt)} · ${userName(a.closedBy)}` : '—'}</span>
+        <span><small>{a.status === 'void' ? 'Anulada' : 'Cerrada'}</small>{a.closedAt ? `${hhmm(a.closedAt)} · ${userName(a.closedBy)}` : '–'}</span>
         <span><small>Duración</small>{minutes(a.openedAt, a.closedAt)} min</span>
       </div>
 
       <div className="order">
         <section className="stack" aria-label="Productos">
-          <input placeholder="Buscar producto…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" placeholder="Buscar producto (Enter agrega el primero)" aria-label="Buscar producto" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           {!q && <div className="cats">{s.settings.categories.map((c) => <button key={c} className={c === cat ? 'active' : ''} onClick={() => setCat(c)}><CatIcon c={c} size={16} /> {c}</button>)}</div>}
-          <div className="grid" style={{ '--min': '160px' } as React.CSSProperties}>
+          <div className="grid" style={{ '--min': '150px' } as React.CSSProperties}>
             {products.map((p) => {
               const left = remaining(p)
-              const off = !p.available || left <= 0
+              const n = inAccount(p.id)
               return (
-                <button key={p.id} className={`prod ${off ? 'off' : ''}`} disabled={!isOpen || off} onClick={() => setAdding(p)}>
+                <button key={p.id} className={`prod ${canSell(p) ? '' : 'off'}`} disabled={!isOpen || !canSell(p)} onClick={() => add(p)}
+                  aria-label={`${p.name}, ${money(p.price)}${n ? `, ${n} en la cuenta` : ''}`}>
+                  {/* key={n}: la animación se repite en cada toque, así se nota que sí se agregó */}
+                  {n > 0 && <span key={n} className="in-acc" aria-hidden>{n}</span>}
                   <span className="ico"><CatIcon c={p.category} size={26} /></span><b>{p.name}</b><span className="price">{money(p.price)}</span>
                   {!p.available ? <span className="pill bad">Agotado</span> : p.count != null && <span className={`pill ${left <= 3 ? 'warn' : ''}`}>{left <= 0 ? 'Sin unidades' : `Quedan ${left}`}</span>}
                 </button>
               )
             })}
           </div>
+          {q && !products.length && <p className="muted">Ningún producto coincide con "{q}".</p>}
         </section>
 
-        <aside className="card stack" aria-label="Cuenta">
+        <aside id="detalle" className="card stack" aria-label="Cuenta">
           <div>
             {a.lines.length === 0 && <p className="muted">Sin productos. Toca uno para agregarlo.</p>}
             {a.lines.map((l) => (
@@ -122,29 +137,19 @@ export default function Cuenta({ accountId, go }: { accountId: string; go: Go })
         </aside>
       </div>
 
-      {adding && <AddModal p={adding} onClose={() => setAdding(undefined)} onAdd={(qty, c) => { addLine(a.id, adding, qty, c); setAdding(undefined) }} />}
+      {/* En tablet y celular el detalle queda debajo de los productos: esta barra deja enviar sin bajar */}
+      {isOpen && active.length > 0 && (
+        <div className="order-bar">
+          <a href="#detalle" className="grow"><small>{active.reduce((x, l) => x + l.qty, 0)} productos · ver cuenta</small><b>{money(t.total)}</b></a>
+          {t.pending > 0 && <button className="primary" onClick={() => sendOrder(a.id)}>Enviar ({t.pending})</button>}
+        </div>
+      )}
+
       {voiding && <AuthPrompt title={voiding === 'all' ? 'Anular cuenta' : 'Anular producto'} onClose={() => setVoiding(undefined)}
         onOk={(auth, reason) => { if (voiding === 'all') { voidAccount(a.id, reason, auth); go('mesas') } else voidLine(a.id, voiding, reason, auth); toast('Anulación registrada') }} />}
       {splitting && <SplitModal accountId={a.id} onClose={() => setSplitting(false)} onDone={(id) => { setSplitting(false); go('cuenta', id) }} />}
       {paying && <PayModal accountId={a.id} total={t.total} onClose={() => setPaying(false)} onPaid={() => { setPaying(false); toast(`Mesa ${table?.name}: cuenta cerrada`); go('mesas') }} />}
     </div>
-  )
-}
-
-function AddModal({ p, onClose, onAdd }: { p: Product; onClose: () => void; onAdd: (qty: number, comment: string) => void }) {
-  const [qty, setQty] = useState(1)
-  const [comment, setComment] = useState('')
-  return (
-    <Modal title={p.name} onClose={onClose}>
-      <div className="stack">
-        <div className="row spread">
-          <span className="qty"><button onClick={() => setQty(Math.max(1, qty - 1))}>−</button><span className="kpi">{qty}</span><button onClick={() => setQty(qty + 1)}>+</button></span>
-          <b>{money(p.price * qty)}</b>
-        </div>
-        <input autoFocus placeholder="Comentario para cocina/barra (opcional)" value={comment} onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onAdd(qty, comment)} />
-        <button className="primary" onClick={() => onAdd(qty, comment)}>Agregar</button>
-      </div>
-    </Modal>
   )
 }
 
@@ -168,56 +173,83 @@ function SplitModal({ accountId, onClose, onDone }: { accountId: string; onClose
   )
 }
 
+/** Billetes con que suele pagar el cliente: los primeros redondeos por encima de lo que debe. */
+const bills = (due: number) => [...new Set([10000, 20000, 50000, 100000].map((b) => Math.ceil(due / b) * b))].filter((v) => v > due).slice(0, 3)
+
 function PayModal({ accountId, total, onClose, onPaid }: { accountId: string; total: number; onClose: () => void; onPaid: () => void }) {
   const { settings } = useStore()
+  const { user } = useUi()
   const methods = settings.paymentMethods
   const [payments, setPayments] = useState<Payment[]>([{ method: methods[0], amount: total }])
   const [received, setReceived] = useState(0)
   const [fe, setFe] = useState(false)
   const [cust, setCust] = useState<Customer>({ docType: 'NIT', doc: '', name: '', email: '' })
+  const [base, setBase] = useState('')
   const sum = paid(payments)
   const cashDue = payments.filter((p) => p.method === 'Efectivo').reduce((x, p) => x + p.amount, 0)
   const setP = (i: number, patch: Partial<Payment>) => setPayments(payments.map((p, j) => (j === i ? { ...p, ...patch } : p)))
   const feOk = !fe || (cust.doc.trim() && cust.name.trim() && /\S+@\S+\.\S+/.test(cust.email))
 
-  if (!openCash()) return <Modal title="Cobrar" onClose={onClose}><div className="alert"><strong>La caja está cerrada.</strong> Ábrela en la sección Caja con el valor de la base.</div></Modal>
+  // Con el cliente esperando, abrir la caja aquí evita salir de la cuenta y volver.
+  if (!openCash()) return (
+    <Modal title="Cobrar" onClose={onClose}>
+      <div className="stack">
+        <div className="alert"><strong>La caja está cerrada.</strong> {can(user?.role, 'caja') ? 'Ábrela con el valor de la base y sigue cobrando.' : 'Pide a quien maneja la caja que la abra.'}</div>
+        {can(user?.role, 'caja') && <>
+          <label className="stack">Base de apertura (COP)<input type="number" inputMode="numeric" min={0} value={base} onChange={(e) => setBase(e.target.value)} /></label>
+          <button className="primary" disabled={base === '' || +base < 0} onClick={() => openCashSession(Math.round(+base))}>Abrir caja con {money(+base || 0)}</button>
+        </>}
+      </div>
+    </Modal>
+  )
 
   const submit = () => { if (pay(accountId, payments, fe ? cust : undefined)) onPaid() }
 
   return (
     <Modal title={`Cobrar ${money(total)}`} onClose={onClose}>
       <div className="stack">
+        {payments.map((p, i) => (
+          <div key={i} className="stack pay-row">
+            <div className="seg" role="group" aria-label={`Método del pago ${i + 1}`}>
+              {methods.map((m) => <button key={m} aria-pressed={p.method === m} onClick={() => setP(i, { method: m })}>{m}</button>)}
+            </div>
+            <div className="row">
+              <input className="grow" type="number" inputMode="numeric" min={0} value={p.amount} onChange={(e) => setP(i, { amount: Math.round(+e.target.value) })} aria-label={`Monto del pago ${i + 1}`} />
+              {payments.length > 1 && <button className="ghost" aria-label={`Quitar pago ${i + 1}`} onClick={() => setPayments(payments.filter((_, j) => j !== i))}><X size={18} /></button>}
+            </div>
+          </div>
+        ))}
         <div className="row">
-          <span className="grow muted">Dividir el pago en</span>
+          <span className="grow muted">Dividir en</span>
           {[2, 3, 4].map((n) => <button key={n} className="sm" onClick={() => setPayments(splitEven(total, n).map((amount, i) => ({ method: payments[i]?.method ?? methods[0], amount })))}>{n} partes</button>)}
           <button className="sm" onClick={() => setPayments([...payments, { method: methods[0], amount: Math.max(0, total - sum) }])}>+ Pago</button>
         </div>
-        {payments.map((p, i) => (
-          <div key={i} className="row">
-            <select value={p.method} onChange={(e) => setP(i, { method: e.target.value })}>{methods.map((m) => <option key={m}>{m}</option>)}</select>
-            <input className="grow" type="number" min={0} value={p.amount} onChange={(e) => setP(i, { amount: Math.round(+e.target.value) })} aria-label="Monto" />
-            {payments.length > 1 && <button className="sm ghost" aria-label="Quitar pago" onClick={() => setPayments(payments.filter((_, j) => j !== i))}><X size={16} /></button>}
-          </div>
-        ))}
         <div className={`row spread ${sum === total ? '' : 'neon'}`}><span>Pagado</span><b>{money(sum)} {sum !== total && `(faltan ${money(total - sum)})`}</b></div>
         {cashDue > 0 && (
-          <div className="row"><span className="grow">Efectivo recibido</span><input type="number" min={0} value={received || ''} onChange={(e) => setReceived(+e.target.value)} style={{ width: 140 }} />
-            {received > cashDue && <b>Cambio: {money(received - cashDue)}</b>}</div>
+          <div className="card stack">
+            <div className="row">
+              <span className="grow">Efectivo recibido</span>
+              {bills(cashDue).map((b) => <button key={b} className="sm" aria-pressed={received === b} onClick={() => setReceived(b)}>{money(b)}</button>)}
+            </div>
+            <input type="number" inputMode="numeric" min={0} placeholder="Otro valor" aria-label="Efectivo recibido" value={received || ''} onChange={(e) => setReceived(+e.target.value)} />
+            {received > cashDue && <div className="row spread"><span>Cambio</span><span className="kpi total">{money(received - cashDue)}</span></div>}
+            {received > 0 && received < cashDue && <span className="neon">Faltan {money(cashDue - received)} en efectivo</span>}
+          </div>
         )}
 
         <label className="row"><input type="checkbox" checked={fe} onChange={(e) => setFe(e.target.checked)} /> El cliente pide factura electrónica</label>
         {fe && (
           <div className="stack card">
             <div className="row">
-              <select value={cust.docType} onChange={(e) => setCust({ ...cust, docType: e.target.value as Customer['docType'] })}>{['NIT', 'CC', 'CE', 'PAS'].map((d) => <option key={d}>{d}</option>)}</select>
-              <input className="grow" placeholder="Número (NIT con dígito de verificación)" value={cust.doc} onChange={(e) => setCust({ ...cust, doc: e.target.value })} />
+              <label className="stack">Tipo<select value={cust.docType} onChange={(e) => setCust({ ...cust, docType: e.target.value as Customer['docType'] })}>{['NIT', 'CC', 'CE', 'PAS'].map((d) => <option key={d}>{d}</option>)}</select></label>
+              <label className="stack grow">Número<input placeholder="NIT con dígito de verificación" value={cust.doc} onChange={(e) => setCust({ ...cust, doc: e.target.value })} /></label>
             </div>
-            <input placeholder="Nombre o razón social" value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })} />
-            <input type="email" placeholder="Correo para enviar la factura" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} />
+            <label className="stack">Nombre o razón social<input value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })} /></label>
+            <label className="stack">Correo para enviar la factura<input type="email" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></label>
             <span className="muted" style={{ fontSize: '.8rem' }}>Demo: el envío a la DIAN y el correo son simulados. La factura queda guardada en Facturación.</span>
           </div>
         )}
-        <button className="primary" disabled={sum !== total || !feOk} onClick={submit}>Confirmar pago</button>
+        <button className="primary" disabled={sum !== total || !feOk} onClick={submit}>Confirmar pago {money(total)}</button>
       </div>
     </Modal>
   )

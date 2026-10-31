@@ -19,9 +19,9 @@ export default function Menu() {
     <div className="stack">
       <div className="row spread">
         <h1>Menú y recetas</h1>
-        <div className="row">
-          <button className={tab === 'productos' ? 'primary' : ''} onClick={() => setTab('productos')}>Productos de venta</button>
-          <button className={tab === 'subrecetas' ? 'primary' : ''} onClick={() => setTab('subrecetas')}>Subrecetas</button>
+        <div className="seg">
+          <button aria-pressed={tab === 'productos'} onClick={() => setTab('productos')}>Productos de venta</button>
+          <button aria-pressed={tab === 'subrecetas'} onClick={() => setTab('subrecetas')}>Subrecetas</button>
         </div>
       </div>
 

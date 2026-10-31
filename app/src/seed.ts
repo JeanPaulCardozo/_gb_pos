@@ -1,5 +1,5 @@
 // Datos de prueba del demo, incluye 14 días de historial para que los reportes muestren algo.
-import type { Account, CashSession, OrderLine, Ingredient, Invoice, Product, State, StockItem, VoidRecord } from './types.ts'
+import type { Account, CashSession, OrderLine, Ingredient, Invoice, Product, Room, State, StockItem, VoidRecord } from './types.ts'
 import { accountTotals, explode, fakeCufe } from './logic.ts'
 
 const st = (id: string, qty: number): Ingredient => ({ kind: 'stock', id, qty })
@@ -69,12 +69,19 @@ const users = [
 
 const tables: State['tables'] = [
   { id: 't0', name: 'Mostrador', x: 13, y: 12, shape: 'bar', seats: 0 },
-  ...[1, 2, 3, 4].map((n) => ({ id: `b${n}`, name: `B${n}`, x: 30 + n * 12, y: 12, shape: 'round' as const, seats: 1 })),
+  ...[1, 2, 3, 4].map((n) => ({ id: `b${n}`, name: `B${n}`, x: 26 + n * 14, y: 12, shape: 'round' as const, seats: 1 })),
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
     id: `m${n}`, name: `M${n}`, x: 14 + ((n - 1) % 4) * 22, y: n <= 4 ? 45 : 75,
     shape: (n % 2 ? 'round' : 'square') as 'round' | 'square', seats: n % 3 ? 4 : 2,
   })),
 ]
+
+export const ROOM_SHAPES: Record<string, Room['points']> = {
+  'Rectángulo': [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
+  'En L': [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 55 }, { x: 60, y: 55 }, { x: 60, y: 100 }, { x: 0, y: 100 }],
+  'En T': [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 40 }, { x: 72, y: 40 }, { x: 72, y: 100 }, { x: 28, y: 100 }, { x: 28, y: 40 }, { x: 0, y: 40 }],
+}
+export const defaultRoom = (): Room => ({ width: 14, depth: 9, points: ROOM_SHAPES['Rectángulo'] })
 
 const settings: State['settings'] = {
   businessName: 'Maldita Conducta S.A.S.',
@@ -136,7 +143,7 @@ function history(s: State) {
 
 export function makeSeed(): State {
   const s: State = {
-    settings, users, tables, stock, subRecipes, products,
+    settings, users, tables, room: defaultRoom(), stock, subRecipes, products,
     attendance: [], accounts: [], invoices: [], cashSessions: [], voids: [], movements: [], purchases: [],
     convenios: [
       { id: 'c1', name: 'Empleados', discountPct: 20, active: true },

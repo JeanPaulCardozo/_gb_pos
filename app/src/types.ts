@@ -27,6 +27,13 @@ export interface Table {
   seats: number
 }
 
+/** Planta del local: medidas reales y contorno. Las mesas y las esquinas usan % de ancho × fondo. */
+export interface Room {
+  width: number // metros
+  depth: number // metros
+  points: { x: number; y: number }[] // contorno en orden, mínimo 3 esquinas
+}
+
 export type Unit = 'g' | 'ml' | 'und'
 
 export interface StockItem {
@@ -189,6 +196,7 @@ export interface State {
   users: User[]
   attendance: Attendance[]
   tables: Table[]
+  room: Room
   stock: StockItem[]
   subRecipes: SubRecipe[]
   products: Product[]

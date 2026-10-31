@@ -9,7 +9,7 @@ export default function Cuentas({ go }: { go: Go }) {
   const { user } = useUi()
   const [tab, setTab] = useState<'abiertas' | 'cerradas'>('abiertas')
   const [day, setDay] = useState(new Date().toLocaleDateString('en-CA'))
-  const name = (id?: string) => s.users.find((u) => u.id === id)?.name ?? '—'
+  const name = (id?: string) => s.users.find((u) => u.id === id)?.name ?? '–'
   const sameDay = (iso?: string) => !!iso && new Date(iso).toLocaleDateString('en-CA') === day
 
   const open = s.accounts.filter((a) => a.status === 'open' && a.lines.length)
@@ -22,8 +22,10 @@ export default function Cuentas({ go }: { go: Go }) {
       <div className="row spread">
         <div><h1>Cuentas</h1><p className="muted" style={{ margin: 0 }}>Seguimiento de cada cuenta: cuándo se abrió, cuándo se envió y cuándo se cerró.</p></div>
         <div className="row">
-          <button className={tab === 'abiertas' ? 'primary' : ''} onClick={() => setTab('abiertas')}>Abiertas ({open.length})</button>
-          <button className={tab === 'cerradas' ? 'primary' : ''} onClick={() => setTab('cerradas')}>Cerradas</button>
+          <div className="seg">
+            <button aria-pressed={tab === 'abiertas'} onClick={() => setTab('abiertas')}>Abiertas ({open.length})</button>
+            <button aria-pressed={tab === 'cerradas'} onClick={() => setTab('cerradas')}>Cerradas</button>
+          </div>
           {tab === 'cerradas' && <input type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Día" />}
         </div>
       </div>
@@ -52,7 +54,7 @@ export default function Cuentas({ go }: { go: Go }) {
                   </td>
                   <td>{hhmm(a.openedAt)} <span className="muted">· {name(a.openedBy)}</span></td>
                   <td>{hhmm(lastSent)}</td>
-                  <td>{a.closedAt ? <>{hhmm(a.closedAt)} <span className="muted">· {name(a.closedBy)}</span></> : '—'}</td>
+                  <td>{a.closedAt ? <>{hhmm(a.closedAt)} <span className="muted">· {name(a.closedBy)}</span></> : '–'}</td>
                   <td className="num">{minutes(a.openedAt, a.closedAt)} min</td>
                   <td className="num">{money(t.total)}</td>
                   <td>

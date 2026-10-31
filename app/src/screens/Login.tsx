@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { APP_NAME, ROLE_LABEL } from '../config.ts'
 import { clock, login, toast, useStore } from '../store.ts'
-import { Keypad } from '../ui.tsx'
+import { Keypad, ThemeToggle } from '../ui.tsx'
 
 // La puerta del speakeasy: se entra con contraseña (PIN). shortcut: sin QR todavía, el backend puede emitir QR rotativos.
 export default function Login() {
@@ -19,14 +19,15 @@ export default function Login() {
 
   return (
     <div className="door">
+      <ThemeToggle />
       <div className="stack" style={{ justifyItems: 'center', gap: '1.5rem' }}>
         <div className="sign">{APP_NAME.split(' ').map((w) => <div key={w}>{w.toUpperCase()}</div>)}</div>
+        <div className="seg" style={{ width: 'min(260px, 100%)' }}>
+          <button aria-pressed={mode === 'entrar'} onClick={() => setMode('entrar')}>Entrar</button>
+          <button aria-pressed={mode === 'turno'} onClick={() => setMode('turno')}>Marcar turno</button>
+        </div>
         <p className="muted" style={{ margin: 0 }}>{mode === 'entrar' ? '¿Cuál es la contraseña?' : 'Marca tu entrada o salida'}</p>
         <Keypad value={pin} onChange={setPin} onDone={done} />
-        <div className="row">
-          <button className={mode === 'entrar' ? 'primary' : ''} onClick={() => setMode('entrar')}>Entrar</button>
-          <button className={mode === 'turno' ? 'primary' : ''} onClick={() => setMode('turno')}>Marcar turno</button>
-        </div>
         <details className="muted" style={{ fontSize: '.8rem' }}>
           <summary>PINs del demo</summary>
           {users.map((u) => <div key={u.id}>{u.pin} · {u.name} ({ROLE_LABEL[u.role]})</div>)}

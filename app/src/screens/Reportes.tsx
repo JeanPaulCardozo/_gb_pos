@@ -21,7 +21,7 @@ export default function Reportes() {
   const byProduct: Record<string, { name: string; cat: string; qty: number; sales: number; cost: number }> = {}
   for (const i of invoices) for (const l of i.lines) {
     const p = s.products.find((x) => x.id === l.productId)
-    const r = (byProduct[l.productId] ??= { name: l.name, cat: p?.category ?? '—', qty: 0, sales: 0, cost: 0 })
+    const r = (byProduct[l.productId] ??= { name: l.name, cat: p?.category ?? '–', qty: 0, sales: 0, cost: 0 })
     r.qty += l.qty; r.sales += l.qty * l.price; r.cost += l.qty * (costOf[l.productId] ?? 0)
   }
   const prods = Object.values(byProduct).sort((a, b) => b.sales - a.sales)
@@ -42,12 +42,12 @@ export default function Reportes() {
   const byHour = Object.entries(group((i) => `${String(new Date(i.at).getHours()).padStart(2, '0')}:00`)).sort()
   const byMethod: Record<string, number> = {}
   for (const i of invoices) for (const p of i.payments) byMethod[p.method] = (byMethod[p.method] ?? 0) + p.amount
-  const waiterOf = (accountId: string) => s.users.find((u) => u.id === s.accounts.find((a) => a.id === accountId)?.openedBy)?.name ?? '—'
+  const waiterOf = (accountId: string) => s.users.find((u) => u.id === s.accounts.find((a) => a.id === accountId)?.openedBy)?.name ?? '–'
   const byWaiter = group((i) => waiterOf(i.accountId))
   const byCat: Record<string, number> = {}
   for (const p of prods) byCat[p.cat] = (byCat[p.cat] ?? 0) + p.sales
   const sorted = (o: Record<string, number>) => Object.entries(o).sort((a, b) => b[1] - a[1])
-  const name = (id: string) => s.users.find((u) => u.id === id)?.name ?? '—'
+  const name = (id: string) => s.users.find((u) => u.id === id)?.name ?? '–'
 
   const Kpi = ({ label, value, hint, bad }: { label: string; value: string; hint?: string; bad?: boolean }) => (
     <div className="card"><div className="muted">{label}</div><div className={`kpi ${bad ? 'bad-text' : ''}`}>{value}</div>{hint && <div className="muted" style={{ fontSize: '.8rem' }}>{hint}</div>}</div>
@@ -58,7 +58,7 @@ export default function Reportes() {
       <div className="row spread">
         <h1>Reportes</h1>
         <div className="row">
-          {Object.keys(RANGES).map((r) => <button key={r} className={r === range ? 'primary' : ''} onClick={() => setRange(r as keyof typeof RANGES)}>{r}</button>)}
+          <div className="seg">{Object.keys(RANGES).map((r) => <button key={r} aria-pressed={r === range} onClick={() => setRange(r as keyof typeof RANGES)}>{r}</button>)}</div>
           <ExportMenu s={s} />
         </div>
       </div>

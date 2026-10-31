@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Pointer } from 'lucide-react'
+import { useState } from 'react'
+import Floor from './Floor.tsx'
 import { accountTotals, money, uid } from '../logic.ts'
 import { can, openAccount, remove, toast, upsert, useStore, useUi } from '../store.ts'
 import type { Table } from '../types.ts'
@@ -11,23 +11,24 @@ export default function Mesas({ go }: { go: Go }) {
   const { user } = useUi()
   const [editing, setEditing] = useState(false)
   const [sel, setSel] = useState<string>()
-  const [drag, setDrag] = useState<{ id: string; x: number; y: number }>()
-  const floor = useRef<HTMLDivElement>(null)
 
   const open = s.accounts.filter((a) => a.status === 'open')
   const tableAccounts = (id: string) => open.filter((a) => a.tableId === id)
   const selected = s.tables.find((t) => t.id === sel)
 
-  const pos = (e: React.PointerEvent) => {
-    const r = floor.current!.getBoundingClientRect()
-    const c = (v: number) => Math.min(97, Math.max(3, Math.round(v * 2) / 2))
-    return { x: c(((e.clientX - r.left) / r.width) * 100), y: c(((e.clientY - r.top) / r.height) * 100) }
-  }
-
   const addTable = () => {
     const n = s.tables.filter((t) => t.name.startsWith('M')).length + 1
     const t: Table = { id: uid(), name: `M${n}`, x: 50, y: 50, shape: 'square', seats: 4 }
     upsert('tables', t); setSel(t.id)
+  }
+  // En servicio cada toque cuenta: mesa libre abre cuenta, mesa con una cuenta entra a ella.
+  // Solo con varias cuentas se pregunta cuál.
+  const tap = (t: Table) => {
+    if (editing) return setSel(t.id)
+    const accs = tableAccounts(t.id)
+    if (accs.length === 0) return go('cuenta', openAccount(t.id))
+    if (accs.length === 1) return go('cuenta', accs[0].id)
+    setSel(t.id)
   }
   const delTable = (t: Table) => {
     if (tableAccounts(t.id).length) return toast('La mesa tiene cuentas abiertas', 'error')
@@ -43,31 +44,10 @@ export default function Mesas({ go }: { go: Go }) {
           {can(user?.role, 'mesas.editar') && <button className={editing ? 'primary' : ''} onClick={() => { setEditing(!editing); setSel(undefined) }}>{editing ? 'Listo' : 'Editar plano'}</button>}
         </div>
       </div>
-      {editing && <div className="row"><button onClick={addTable}>+ Agregar mesa</button><span className="muted">Arrastra las mesas para ubicarlas. Toca una para editarla.</span></div>}
-      {!editing && <div className="card" style={{ borderLeft: '4px solid var(--neon)' }}><Pointer size={18} style={{ verticalAlign: '-3px', color: 'var(--neon)' }} /> <b>Toca una mesa para tomar el pedido.</b> <span className="muted">Para clientes en barra o para llevar, usa "Mostrador".</span></div>}
+      {editing && <div className="row"><button onClick={addTable}>+ Agregar mesa</button><span className="muted">Toca una mesa para cambiar nombre, puestos o forma.</span></div>}
+      {!editing && <p className="muted" style={{ margin: 0 }}>Toca una mesa para tomar el pedido. Para barra o para llevar, usa "Mostrador".</p>}
 
-      <div ref={floor} className={`floor ${editing ? 'editing' : ''}`}>
-        {s.tables.map((t) => {
-          const accs = tableAccounts(t.id)
-          const pending = accs.some((a) => a.lines.some((l) => l.status === 'pending'))
-          const p = drag?.id === t.id ? drag : t
-          const total = accs.reduce((sum, a) => sum + accountTotals(a, s.convenios, s.settings.taxRate).total, 0)
-          return (
-            <button
-              key={t.id}
-              className={`tbl ${t.shape} ${accs.length ? 'busy' : ''} ${pending ? 'pending' : ''} ${sel === t.id ? 'sel' : ''}`}
-              style={{ left: `${p.x}%`, top: `${p.y}%`, cursor: editing ? 'grab' : 'pointer' }}
-              aria-label={`Mesa ${t.name}${accs.length ? `, ${accs.length} cuentas abiertas` : ', libre'}`}
-              onPointerDown={(e) => { if (!editing) return; e.currentTarget.setPointerCapture(e.pointerId); setDrag({ id: t.id, ...pos(e) }) }}
-              onPointerMove={(e) => drag?.id === t.id && setDrag({ id: t.id, ...pos(e) })}
-              onPointerUp={() => { if (drag) { upsert('tables', { ...t, x: drag.x, y: drag.y }); setDrag(undefined) } }}
-              onClick={() => setSel(t.id)}
-            >
-              <span>{t.name}{accs.length > 0 && <small>{accs.length > 1 ? `${accs.length} cuentas · ` : ''}{money(total)}</small>}</span>
-            </button>
-          )
-        })}
-      </div>
+      <Floor editing={editing} sel={sel} onTap={tap} />
 
       {!editing && open.length > 0 && (
         <div className="card stack">

@@ -18,9 +18,9 @@ export default function Inventario() {
     <div className="stack">
       <div className="row spread">
         <h1>Inventario</h1>
-        <div className="row">
-          <button className={tab === 'insumos' ? 'primary' : ''} onClick={() => setTab('insumos')}>Insumos</button>
-          <button className={tab === 'movimientos' ? 'primary' : ''} onClick={() => setTab('movimientos')}>Movimientos</button>
+        <div className="seg">
+          <button aria-pressed={tab === 'insumos'} onClick={() => setTab('insumos')}>Insumos</button>
+          <button aria-pressed={tab === 'movimientos'} onClick={() => setTab('movimientos')}>Movimientos</button>
         </div>
       </div>
       {low.length > 0 && <div className="alert"><strong>Stock bajo:</strong> {low.map((i) => i.name).join(', ')}</div>}
